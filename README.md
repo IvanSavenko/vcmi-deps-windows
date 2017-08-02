@@ -27,3 +27,7 @@ vcpkg-export-20170802-233045.7z -> vcpkg-export-x64-windows-v140.7z
 # Windows. Fail for some reason.
 7z.exe rn vcpkg-export-x64-windows-v140.7z vcpkg-export-20170802-233045 vcpkg
 ```
+* Archives can be uploaded to releases using [github-release](https://github.com/aktau/github-release):
+```
+github-release upload --user vcmi --repo vcmi-deps-windows --tag v1 --name "vcpkg-export-x86-windows-v140.7z" --file vcpkg-export-x86-windows-v140.7z --security-token 9eatokentokentokentokentoken6e
+```
