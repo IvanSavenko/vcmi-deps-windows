@@ -31,3 +31,7 @@ vcpkg-export-20170802-233045.7z -> vcpkg-export-x64-windows-v140.7z
 ```
 github-release upload --user vcmi --repo vcmi-deps-windows --tag v1 --name "vcpkg-export-x86-windows-v140.7z" --file vcpkg-export-x86-windows-v140.7z --security-token 9eatokentokentokentokentoken6e
 ```
+* Package list can be generated with:
+```
+echo -e "\n| Package | Version |\n| --- | --- |"; ./vcpkg list | grep x86 | grep -v static | awk '{ print "| " $1 " | " $2 " |"}' | sed -r 's/:x86-windows//'
+```
