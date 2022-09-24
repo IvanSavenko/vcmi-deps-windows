@@ -7,8 +7,8 @@ Built and exported by [Vcpkg](https://github.com/Microsoft/vcpkg).
 * Install Vcpkg and it's dependencies.
 * Build all required packages for one or both architectures:
 ```
-vcpkg install tbb:x64-windows fuzzylite:x64-windows sdl2:x64-windows sdl2-image:x64-windows sdl2-ttf:x64-windows sdl2-mixer[mpg123]:x64-windows boost:x64-windows qt5:x64-windows ffmpeg:x64-windows luajit:x64-windows
-vcpkg install tbb:x86-windows fuzzylite:x86-windows sdl2:x86-windows sdl2-image:x86-windows sdl2-ttf:x86-windows sdl2-mixer[mpg123]:x86-windows boost:x86-windows qt5:x86-windows ffmpeg:x86-windows luajit:x86-windows
+vcpkg install tbb:x64-windows fuzzylite:x64-windows sdl2:x64-windows sdl2-image:x64-windows sdl2-ttf:x64-windows sdl2-mixer[mpg123]:x64-windows boost:x64-windows qt5-base:x64-windows ffmpeg:x64-windows luajit:x64-windows
+vcpkg install tbb:x86-windows fuzzylite:x86-windows sdl2:x86-windows sdl2-image:x86-windows sdl2-ttf:x86-windows sdl2-mixer[mpg123]:x86-windows boost:x86-windows qt5-base:x86-windows ffmpeg:x86-windows luajit:x86-windows
 ```
 * Export packages so 7z archive will be produced:
 ```
