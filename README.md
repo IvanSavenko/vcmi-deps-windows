@@ -26,6 +26,10 @@ vcpkg-export-20170802-233045.7z -> vcpkg-export-x64-windows-v140.7z
 7za rn vcpkg-export-x64-windows-v140.7z vcpkg-export-20170802-233045 vcpkg
 # Windows. Fail for some reason.
 7z.exe rn vcpkg-export-x64-windows-v140.7z vcpkg-export-20170802-233045 vcpkg
+
+* Hacks to fix issues with release build
+* Remove debug section from archive under installed/x64-windows and add new empty folder debug, copy release binaries from installed/x64-windows/bin to installed/x64-windows/debug/bin and same for lib folder
+* Remove TBBTargets-debug.cmake so that TBB is not aware that it has any kind of debug build during find-package or whatever
 ```
 * Archives can be uploaded to releases using [github-release](https://github.com/aktau/github-release):
 ```
