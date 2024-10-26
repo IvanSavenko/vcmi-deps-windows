@@ -1,0 +1,78 @@
+name: VCMI - vcpkg dependencies
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  schedule:
+    - cron: '0 2 * * 0' #every sunday 02:00
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: msvc-x64
+            triplet: x64-windows
+          - platform: msvc-x86
+            triplet: x86-windows
+
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    - name: Checkout vcpkg repository
+      uses: actions/checkout@v4
+      with:
+        repository: 'microsoft/vcpkg'
+
+    # NOTE: disabling debug for both 32 and 64 bit triplets, so 64 host / 32 guest won't build debug version of 64-bit tools
+    - name: Disable debug builds
+      run: |
+        echo 'set(VCPKG_BUILD_TYPE release)' >>triplets/x64-windows.cmake
+        echo 'set(VCPKG_BUILD_TYPE release)' >>triplets/x86-windows.cmake
+
+    - name: Enable Windows 7 targeting
+      run: |
+        echo 'set(VCPKG_CXX_FLAGS "-D_WIN32_WINNT=0x0601 -DWINVER=0x0601")' >>triplets/x64-windows.cmake
+        echo 'set(VCPKG_CXX_FLAGS "-D_WIN32_WINNT=0x0601 -DWINVER=0x0601")' >>triplets/x86-windows.cmake
+        echo 'set(VCPKG_C_FLAGS   "-D_WIN32_WINNT=0x0601 -DWINVER=0x0601")' >>triplets/x64-windows.cmake
+        echo 'set(VCPKG_C_FLAGS   "-D_WIN32_WINNT=0x0601 -DWINVER=0x0601")' >>triplets/x86-windows.cmake
+
+    - name: Initialize vcpkg
+      run: |
+        ./bootstrap-vcpkg.bat
+
+    # NOTE: listing all boost components required by VCMI. Full boost is not suitable due to python being broken on 32-bit Win7
+    - name: Build packages
+      run: |
+        ./vcpkg.exe install tbb fuzzylite sdl2 sdl2-image sdl2-ttf sdl2-mixer[core,mpg123] qt5-base ffmpeg[core,avcodec,avformat,swresample,swscale] qt5-tools boost-filesystem boost-system boost-thread boost-program-options boost-locale boost-iostreams boost-headers boost-foreach boost-format boost-crc boost-logic boost-multi-array boost-ptr-container boost-heap boost-bimap boost-asio boost-stacktrace boost-assign boost-geometry boost-uuid boost-uuid boost-process --triplet '${{matrix.triplet}}'
+
+    - name: Export packages
+      run: |
+        ./vcpkg.exe export tbb fuzzylite sdl2 sdl2-image sdl2-ttf sdl2-mixer qt5-base ffmpeg qt5-tools boost-filesystem boost-system boost-thread boost-program-options boost-locale boost-iostreams boost-headers boost-foreach boost-format boost-crc boost-logic boost-multi-array boost-ptr-container boost-heap boost-bimap boost-asio boost-stacktrace boost-assign boost-geometry boost-uuid boost-process --raw --triplet '${{matrix.triplet}}' --output=result/vcpkg
+      
+    # We don't really need pdb's for tools and they eat A LOT of space
+    # even pdb's for dependencies are extremely situational so we can consider removing pdb's entirely to reduce prebuilds size / install time
+    - name: Trim pdb files from packages
+      run: |
+        find result/vcpkg/installed/*/tools -type f -name "*.pdb" -delete 
+
+    - name: Created prebuilts package
+      run: |
+        tar --create --xz --file dependencies-${{matrix.platform}}.txz -C result vcpkg
+
+    - name: Log resulting packages
+      run: ./vcpkg.exe list
+
+    - name: Upload prebuilts package
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependencies-${{matrix.platform}}
+        path: ${{github.workspace}}/dependencies-${{matrix.platform}}.txz
+        compression-level: 0
