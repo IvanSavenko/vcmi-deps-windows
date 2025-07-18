@@ -2,11 +2,10 @@ name: VCMI - vcpkg dependencies
 
 on:
   push:
-    branches:
-      - master
+    branches: [ master ]
   pull_request:
   schedule:
-    - cron: '0 2 * * 0' #every sunday 02:00
+    - cron: '0 2 * * 0' # every Sunday 02:00
   workflow_dispatch:
 
 jobs:
@@ -17,62 +16,86 @@ jobs:
         include:
           - platform: msvc-x64
             triplet: x64-windows
+            runner: windows-latest
+            # commit before addition of boost filesystem 1.87 that removes Win7 support https://github.com/microsoft/vcpkg/pull/42678
+            commit: ec12d917a85839741f8345905f71b3e7f56d9ddc 
           - platform: msvc-x86
             triplet: x86-windows
+            runner: windows-latest
+            # commit before addition of boost filesystem 1.87 that removes Win7 support https://github.com/microsoft/vcpkg/pull/42678
+            commit: ec12d917a85839741f8345905f71b3e7f56d9ddc
+          - platform: msvc-arm64
+            triplet: arm64-windows
+            runner: windows-11-arm
+            # commit before changes to yasm package which seems to break ARM builds https://github.com/microsoft/vcpkg/pull/45856
+            commit: 94a9df6990e426ec3fff1a4ba20016da4aafea70
 
-    runs-on: windows-latest
+    runs-on: ${{ matrix.runner }}
     defaults:
       run:
         shell: bash
 
     steps:
-    - name: Checkout vcpkg repository
-      uses: actions/checkout@v4
-      with:
-        repository: 'microsoft/vcpkg'
+      - name: Checkout vcpkg repository
+        uses: actions/checkout@v4
+        with:
+          repository: 'microsoft/vcpkg'
+          ref: ${{ matrix.commit }}
 
-    # NOTE: disabling debug for both 32 and 64 bit triplets, so 64 host / 32 guest won't build debug version of 64-bit tools
-    - name: Disable debug builds
-      run: |
-        echo 'set(VCPKG_BUILD_TYPE release)' >>triplets/x64-windows.cmake
-        echo 'set(VCPKG_BUILD_TYPE release)' >>triplets/x86-windows.cmake
+      # NOTE: disabling debug for all triplets, so 64 host / 32 guest won't build debug version of 64-bit tools
+      # Othervice, x86 package size is way larger than needed
+      - name: Disable debug builds
+        run: |
+          echo 'set(VCPKG_BUILD_TYPE release)' >>triplets/x64-windows.cmake
+          echo 'set(VCPKG_BUILD_TYPE release)' >>triplets/x86-windows.cmake
+          echo 'set(VCPKG_BUILD_TYPE release)' >>triplets/arm64-windows.cmake
 
-    - name: Enable Windows 7 targeting
-      run: |
-        echo 'set(VCPKG_CXX_FLAGS "-D_WIN32_WINNT=0x0601 -DWINVER=0x0601")' >>triplets/x64-windows.cmake
-        echo 'set(VCPKG_CXX_FLAGS "-D_WIN32_WINNT=0x0601 -DWINVER=0x0601")' >>triplets/x86-windows.cmake
-        echo 'set(VCPKG_C_FLAGS   "-D_WIN32_WINNT=0x0601 -DWINVER=0x0601")' >>triplets/x64-windows.cmake
-        echo 'set(VCPKG_C_FLAGS   "-D_WIN32_WINNT=0x0601 -DWINVER=0x0601")' >>triplets/x86-windows.cmake
+      - name: Enable Windows 7 targeting (only for x86/x64)
+        if: matrix.triplet == 'x64-windows' || matrix.triplet == 'x86-windows'
+        run: |
+          echo 'set(VCPKG_CXX_FLAGS "-D_WIN32_WINNT=0x0601 -DWINVER=0x0601")' >>triplets/${{ matrix.triplet }}.cmake
+          echo 'set(VCPKG_C_FLAGS   "-D_WIN32_WINNT=0x0601 -DWINVER=0x0601")' >>triplets/${{ matrix.triplet }}.cmake
 
-    - name: Initialize vcpkg
-      run: |
-        ./bootstrap-vcpkg.bat
+      - name: Initialize vcpkg
+        run: ./bootstrap-vcpkg.bat
 
-    # NOTE: listing all boost components required by VCMI. Full boost is not suitable due to python being broken on 32-bit Win7
-    - name: Build packages
-      run: |
-        ./vcpkg.exe install tbb fuzzylite sdl2 sdl2-image sdl2-ttf sdl2-mixer[core,mpg123] qt5-base ffmpeg[core,avcodec,avformat,swresample,swscale] qt5-tools boost-filesystem boost-system boost-thread boost-program-options boost-locale boost-iostreams boost-headers boost-foreach boost-format boost-crc boost-logic boost-multi-array boost-ptr-container boost-heap boost-bimap boost-asio boost-stacktrace boost-assign boost-geometry boost-uuid boost-uuid boost-process --triplet '${{matrix.triplet}}'
+      - name: Install dependencies
+        run: |
+          ./vcpkg.exe install yasm --triplet "${{ matrix.triplet }}"
+          ./vcpkg.exe install \
+            tbb fuzzylite sdl2 sdl2-image sdl2-ttf sdl2-mixer[core,mpg123] \
+            qt5-base qt5-tools \
+            ffmpeg[core,avcodec,avformat,swresample,swscale] \
+            boost-filesystem boost-system boost-thread boost-program-options boost-locale \
+            boost-iostreams boost-headers boost-foreach boost-format boost-crc boost-logic \
+            boost-multi-array boost-ptr-container boost-heap boost-bimap boost-asio \
+            boost-stacktrace boost-assign boost-geometry boost-uuid boost-process \
+            --triplet "${{ matrix.triplet }}"
 
-    - name: Export packages
-      run: |
-        ./vcpkg.exe export tbb fuzzylite sdl2 sdl2-image sdl2-ttf sdl2-mixer qt5-base ffmpeg qt5-tools boost-filesystem boost-system boost-thread boost-program-options boost-locale boost-iostreams boost-headers boost-foreach boost-format boost-crc boost-logic boost-multi-array boost-ptr-container boost-heap boost-bimap boost-asio boost-stacktrace boost-assign boost-geometry boost-uuid boost-process --raw --triplet '${{matrix.triplet}}' --output=result/vcpkg
-      
-    # We don't really need pdb's for tools and they eat A LOT of space
-    # even pdb's for dependencies are extremely situational so we can consider removing pdb's entirely to reduce prebuilds size / install time
-    - name: Trim pdb files from packages
-      run: |
-        find result/vcpkg/installed/*/tools -type f -name "*.pdb" -delete 
+      - name: Export packages
+        run: |
+          ./vcpkg.exe export \
+            tbb fuzzylite sdl2 sdl2-image sdl2-ttf sdl2-mixer qt5-base qt5-tools ffmpeg \
+            boost-filesystem boost-system boost-thread boost-program-options boost-locale \
+            boost-iostreams boost-headers boost-foreach boost-format boost-crc boost-logic \
+            boost-multi-array boost-ptr-container boost-heap boost-bimap boost-asio \
+            boost-stacktrace boost-assign boost-geometry boost-uuid boost-process \
+            --raw --triplet "${{ matrix.triplet }}" --output=result/vcpkg
 
-    - name: Created prebuilts package
-      run: |
-        tar --create --xz --file dependencies-${{matrix.platform}}.txz -C result vcpkg
+      - name: Trim pdb files
+        run: |
+          find result/vcpkg/installed/*/tools -type f -name "*.pdb" -delete
 
-    - name: Log resulting packages
-      run: ./vcpkg.exe list
+      - name: Create archive
+        run: |
+          tar --create --xz --file dependencies-${{ matrix.platform }}.txz -C result vcpkg
 
-    - name: Upload prebuilts package
-      uses: actions/upload-artifact@v4
-      with:
-        name: dependencies-${{matrix.platform}}
-        path: ${{github.workspace}}/dependencies-${{matrix.platform}}.txz
-        compression-level: 0
+      - name: Log resulting packages
+        run: ./vcpkg.exe list
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependencies-${{ matrix.platform }}
+          path: ${{ github.workspace }}/dependencies-${{ matrix.platform }}.txz
+          compression-level: 0
